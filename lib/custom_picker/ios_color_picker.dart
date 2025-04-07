@@ -1,7 +1,9 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:ios_color_picker/custom_picker/pickers/slider_picker/slider_helper.dart';
 import 'package:ios_color_picker/custom_picker/pickers_selector_row.dart';
 import 'package:ios_color_picker/custom_picker/shared.dart';
+
 import 'color_observer.dart';
 import 'helpers/cache_helper.dart';
 import 'history_colors.dart';
@@ -21,10 +23,35 @@ class IosColorPicker extends StatefulWidget {
 }
 
 class _IosColorPickerState extends State<IosColorPicker> {
+  late TextEditingController _hexController;
+
   @override
   void initState() {
     CacheHelper.init();
+    _hexController = TextEditingController();
     super.initState();
+  }
+
+  @override
+  void dispose() {
+    super.dispose();
+    _hexController.dispose();
+  }
+
+  Color? _parseHex(String input, {double alpha = 1.0}) {
+    final hex = input.replaceAll('#', '').trim();
+    if (hex.length == 6) {
+      final int? colorValue = int.tryParse(hex, radix: 16);
+      if (colorValue != null) {
+        return Color(((0xFF * 256 * 256 * 256) | colorValue)).withOpacity(alpha);
+      }
+    }
+    return null;
+  }
+
+  String _toHex(Color color) {
+    final hex = (color.value & 0xFFFFFF).toRadixString(16).padLeft(6, '0');
+    return '#${hex.toUpperCase()}';
   }
 
   @override
@@ -43,7 +70,7 @@ class _IosColorPickerState extends State<IosColorPicker> {
         ),
         Container(
           width: maxWidth(context),
-          height: 340 + componentsHeight(context),
+          height: 360 + componentsHeight(context),
           decoration: BoxDecoration(
             color: backgroundColor.withValues(alpha: 0.98),
             borderRadius: BorderRadius.only(
@@ -72,17 +99,14 @@ class _IosColorPickerState extends State<IosColorPicker> {
                     Text(
                       'Colors',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          fontSize: 17,
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700),
+                          fontSize: 17, color: Colors.white, fontWeight: FontWeight.w700),
                     ),
                     IconButton(
                       highlightColor: Colors.transparent,
                       onPressed: () => Navigator.pop(context),
                       icon: Container(
                         padding: EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                            color: Color(0xff3A3A3B), shape: BoxShape.circle),
+                        decoration: BoxDecoration(color: Color(0xff3A3A3B), shape: BoxShape.circle),
                         child: Icon(
                           Icons.close_rounded,
                           color: Color(0xffA4A4AA),
@@ -96,14 +120,57 @@ class _IosColorPickerState extends State<IosColorPicker> {
               PickersSelectorRow(
                 onColorChanged: widget.onColorSelected,
               ),
+              Padding(
+                padding: const EdgeInsets.only(
+                  left: 17,
+                  right: 17,
+                  bottom: 12,
+                ),
+                child: ValueListenableBuilder<Color>(
+                  valueListenable: colorController,
+                  builder: (context, color, _) {
+                    final String hexString = _toHex(color);
+                    if (_hexController.text.toUpperCase() != hexString) {
+                      _hexController.text = hexString;
+                    }
+                    return CupertinoTextField(
+                      controller: _hexController,
+                      placeholder: "#RRGGBB",
+                      style: const TextStyle(color: Colors.white),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF3A3A3B),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      prefix: const Padding(
+                        padding: EdgeInsets.only(left: 8),
+                        child: Icon(
+                          CupertinoIcons.number,
+                          color: Colors.white70,
+                          size: 18,
+                        ),
+                      ),
+                      onChanged: (val) {
+                        final parsed = _parseHex(val);
+                        if (parsed != null) {
+                          final newColor = parsed.withOpacity(color.opacity);
+                          colorController.value = newColor;
+                          widget.onColorSelected(newColor);
+                        }
+                      },
+                    );
+                  },
+                ),
+              ),
 
               ///ALL
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 17.0),
                 child: Text(
                   'OPACITY',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontSize: 13, color: Colors.white.withValues(alpha: 0.6)),
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleLarge
+                      ?.copyWith(fontSize: 13, color: Colors.white.withValues(alpha: 0.6)),
                 ),
               ),
               Row(
@@ -111,15 +178,13 @@ class _IosColorPickerState extends State<IosColorPicker> {
                 children: [
                   Expanded(
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12.0, vertical: 2),
+                      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 2),
                       child: SizedBox(
                         height: 36.0,
                         child: ValueListenableBuilder<Color>(
                           valueListenable: colorController,
                           builder: (context, color, child) {
-                            return ColorPickerSlider(
-                                TrackType.alpha, HSVColor.fromColor(color),
+                            return ColorPickerSlider(TrackType.alpha, HSVColor.fromColor(color),
                                 small: false, (v) {
                               colorController.updateOpacity(v.alpha);
                               widget.onColorSelected(colorController.value);
@@ -135,22 +200,18 @@ class _IosColorPickerState extends State<IosColorPicker> {
                     margin: const EdgeInsets.only(right: 16, left: 16),
                     alignment: Alignment.center,
                     decoration: const BoxDecoration(
-                        color: valueColor,
-                        borderRadius: BorderRadius.all(Radius.circular(8))),
+                        color: valueColor, borderRadius: BorderRadius.all(Radius.circular(8))),
                     child: ValueListenableBuilder<Color>(
                       valueListenable: colorController,
                       builder: (context, color, child) {
                         int alpha = (color.a * 100).toInt();
                         return Text(
                           "$alpha%",
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodySmall
-                              ?.copyWith(
-                                  fontSize: 16,
-                                  letterSpacing: 0.6,
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w600),
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              fontSize: 16,
+                              letterSpacing: 0.6,
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600),
                         );
                       },
                     ),
